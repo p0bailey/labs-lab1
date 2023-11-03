@@ -1,0 +1,48 @@
+name: GITHUB OIDC AWS SECRETS ENGINE
+
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  read-secret:
+    runs-on: ${github_runner}
+    env:
+      VAULT_URL: $${{ secrets.VAULT_URL }}
+      VAULT_AUTH_PATH: jwt
+      VAULT_ROLE: $${{ secrets.VAULT_ROLE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2.0.3
+
+      - name: Retrieve Secrets
+        id: secretdata
+        uses: hashicorp/vault-action@v2.7.3
+        with:
+          url: $${{ secrets.VAULT_URL }}
+          role: $${{ secrets.VAULT_ROLE }}
+          method: jwt
+          secrets: |
+            /$${{secrets.AWS_SECRET_ENGINE_PATH}}/creds/$${{secrets.AWS_SECRET_ENGINE_PATH}} access_key | AWS_ACCESS_KEY_ID;
+            /$${{secrets.AWS_SECRET_ENGINE_PATH}}/creds/$${{secrets.AWS_SECRET_ENGINE_PATH}} secret_key | AWS_SECRET_ACCESS_KEY;
+            /$${{secrets.AWS_SECRET_ENGINE_PATH}}/creds/$${{secrets.AWS_SECRET_ENGINE_PATH}} security_token | AWS_SESSION_TOKEN;
+
+      - name: Terraform Version
+        run: terraform --version
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply ( Only on main branch )
+        if: github.ref == 'refs/heads/main'
+        run: terraform destroy -auto-approve
